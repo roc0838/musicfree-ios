@@ -1,0 +1,106 @@
+name: Build iOS (unsigned IPA)
+
+# 触发方式：
+#  1) 推送 v* 标签（例如 v0.6.3）——推荐，标签即版本号
+#  2) 在 Actions 页面手动触发，可指定版本号
+# 产物为「未签名 IPA」，供本地用自签工具（AltStore / Sideloadly / 爱思等）重签安装。
+# 每次构建都会新建一个 Release，旧版本 Release 不会被删除，可随时回退。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（例如 0.6.3）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            V="${{ github.event.inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building version: $V"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install JS dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Archive (unsigned, device)
+        run: |
+          cd ios
+          xcodebuild \
+            -workspace MusicFree.xcworkspace \
+            -scheme MusicFree \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/MusicFree.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            clean archive
+
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          APP="$RUNNER_TEMP/MusicFree.xcarchive/Products/Applications/MusicFree.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::未找到构建产物 $APP"
+            exit 1
+          fi
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry "MusicFree-ios-${{ steps.ver.outputs.version }}-unsigned.ipa" Payload
+          ls -lh ./*.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MusicFree-ios-${{ steps.ver.outputs.version }}-unsigned
+          path: ./*.ipa
+          retention-days: 90
+
+      - name: Create Release (keep old releases)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: MusicFree iOS v${{ steps.ver.outputs.version }} (unsigned)
+          body: |
+            MusicFree iOS v${{ steps.ver.outputs.version }}
+
+            ⚠️ 本包为**未签名 IPA**，请用自签工具（AltStore / Sideloadly / 爱思助手等）签名后安装。
+
+            更新内容：
+            - 【听书】每集独立记忆播放进度（断点续播），可在 设置-基本设置-播放 中开关
+            - 【听书】倍速新增 2.5x / 3x，定时关闭新增 90 / 120 分钟
+            - 【修复】备份文件损坏不再崩溃；移除原作者更新源，避免误导向其他版本
+          files: ./*.ipa
+          draft: false
+          prerelease: false
