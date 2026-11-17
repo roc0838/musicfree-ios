@@ -3,6 +3,6 @@ on:
   workflow_dispatch:
 jobs:
   test:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
-      - run: sw_vers && echo "macos runner ok"
+      - run: sw_vers
