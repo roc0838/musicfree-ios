@@ -11,6 +11,7 @@ import rpx from "@/utils/rpx";
 import timeformat from "@/utils/timeformat";
 import { fontSizeConst } from "@/constants/uiConst";
 import TrackPlayer, { useProgress } from "@/core/trackPlayer";
+import { diagLog } from "@/utils/log";
 
 const THUMB_SIZE = rpx(20);
 const THUMB_HIT = rpx(48);
@@ -46,12 +47,28 @@ export default function SeekBar() {
     );
 
     const seekToPosition = useCallback(
-        (position: number) => {
+        async (position: number) => {
             let next = position;
             if (progress.duration > 0 && next >= progress.duration - 2) {
                 next = Math.max(progress.duration - 2, 0);
             }
-            TrackPlayer.seekTo(next);
+            diagLog("进度条拖动 seek", {
+                target: next,
+                duration: progress.duration,
+            });
+            // 首次 seek（播放器可能仍在 buffer，seek 会被丢弃），短延时后重试一次确保生效
+            await TrackPlayer.seekTo(next);
+            try {
+                await new Promise(resolve => setTimeout(resolve, 180));
+                const cur = await TrackPlayer.getProgress();
+                if (cur && Math.abs(cur.position - next) > 3) {
+                    diagLog("进度条 seek 未生效, 重试", {
+                        expected: next,
+                        actual: cur.position,
+                    });
+                    await TrackPlayer.seekTo(next);
+                }
+            } catch { }
         },
         [progress.duration],
     );

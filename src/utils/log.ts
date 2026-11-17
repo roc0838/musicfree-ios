@@ -106,12 +106,55 @@ export function errorLog(desc: string, message: any) {
     }
 }
 
+/**
+ * 诊断日志：不受调试开关限制，始终写入 trace-log.log，
+ * 用于记录 seek / 续播等关键操作，方便从设置页导出后定位问题。
+ */
+export function diagLog(desc: string, message?: any) {
+    try {
+        traceLogger.info({
+            desc,
+            message,
+            ts: Date.now(),
+        });
+    } catch { }
+}
+
 export function devLog(
     method: "log" | "error" | "warn" | "info",
     ...args: any[]
 ) {
     if (Config.getConfig("debug.devLog")) {
         addLog(method, args);
+    }
+}
+
+/**
+ * 汇总全部日志文件（错误日志 + 诊断日志），拼成一份文本供导出。
+ * 不依赖调试开关，始终把 trace-log 一并带上。
+ */
+export async function collectAllLogs(): Promise<string> {
+    try {
+        const files = await RNFS.readDir(pathConst.logPath);
+        const logFiles = files
+            .filter(f => f.isFile() && /\.log$/i.test(f.name))
+            .sort((a, b) => (a.name < b.name ? 1 : -1));
+        const header = [
+            "===== MusicFree iOS 日志导出 =====",
+            `导出时间: ${new Date().toLocaleString()}`,
+            `日志文件数: ${logFiles.length}`,
+            "",
+        ].join("\n");
+        const parts: string[] = [];
+        for (const file of logFiles) {
+            try {
+                const content = await RNFS.readFile(file.path, "utf8");
+                parts.push(`----- ${file.name} -----\n${content}`);
+            } catch { }
+        }
+        return header + (parts.join("\n\n") || "(暂无日志内容)");
+    } catch {
+        return "(读取日志失败)";
     }
 }
 

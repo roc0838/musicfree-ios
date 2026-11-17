@@ -14,7 +14,7 @@ import useColors from "@/hooks/useColors";
 import LyricUtil, { NativeTextAlignment } from "@/native/lyricUtil";
 import { AppConfigPropertyKey } from "@/types/core/config";
 import { clearCache, getCacheSize, sizeFormatter } from "@/utils/fileUtils";
-import { clearLog, getErrorLogContent } from "@/utils/log";
+import { clearLog, collectAllLogs, getErrorLogContent } from "@/utils/log";
 import { qualityKeys } from "@/utils/qualities";
 import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast";
@@ -22,8 +22,9 @@ import Clipboard from "@react-native-clipboard/clipboard";
 import Slider from "@react-native-community/slider";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SectionList, StyleSheet, TouchableOpacity, View } from "react-native";
-import { readdir } from "react-native-fs";
+import { CachesDirectoryPath, readdir, writeFile } from "react-native-fs";
 import { FlatList, ScrollView } from "react-native-gesture-handler";
+import Share from "react-native-share";
 
 function createSwitch(
     title: string,
@@ -149,10 +150,36 @@ export default function BasicSetting() {
         refreshCacheSize();
     }, []);
 
+    // 导出日志：汇总全部日志写入临时文件，调起系统分享面板
+    const handleExportLog = useCallback(async () => {
+        try {
+            const content = await collectAllLogs();
+            const fileName = `MusicFree-log-${Date.now()}.txt`;
+            const filePath = `${CachesDirectoryPath}/${fileName}`;
+            await writeFile(filePath, content, "utf8");
+            await Share.open({
+                title: "MusicFree 日志",
+                subject: "MusicFree 日志",
+                url: `file://${filePath}`,
+                type: "text/plain",
+            });
+        } catch (e: any) {
+            // 用户取消分享不算失败
+            if (e?.message && !/cancel|abort|dismiss/i.test(e.message)) {
+                Toast.warn(t("basicSettings.exportLog.failed"));
+            }
+        }
+    }, [t]);
+
     const basicOptions = [
         {
             title: t("basicSettings.common"),
             data: [
+                {
+                    title: t("basicSettings.exportLog"),
+                    right: undefined,
+                    onPress: handleExportLog,
+                },
                 createRadio(
                     t("basicSettings.maxHistoryLength"),
                     "basic.maxHistoryLen",

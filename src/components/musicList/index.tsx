@@ -3,7 +3,15 @@ import TrackPlayer from "@/core/trackPlayer";
 import rpx from "@/utils/rpx";
 import { FlashList } from "@shopify/flash-list";
 import React, { useRef, useCallback, useState, useEffect } from "react";
-import { FlatListProps, Pressable, StyleSheet, View } from "react-native";
+import {
+    FlatListProps,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Pressable,
+    StyleSheet,
+    View,
+} from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import ListEmpty from "../base/listEmpty";
 import ListFooter from "../base/listFooter";
 import MusicItem from "../mediaItem/musicItem";
@@ -11,6 +19,7 @@ import { isSameMediaItem } from "@/utils/mediaUtils";
 import Icon from "../base/icon";
 import { iconSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
+import ScrollThumb from "./scrollThumb";
 
 interface IMusicListProps {
     /** 顶部 */
@@ -52,6 +61,51 @@ export default function MusicList(props: IMusicListProps) {
     const flashListRef = useRef<FlashList<IMusic.IMusicItem>>(null);
     const [showBadge, setShowBadge] = useState(false);
     const hideTimeoutRef = useRef<NodeJS.Timeout>();
+
+    // 侧边快捷滑块：列表够长才显示（几百集以下没必要）
+    const showScrollThumb = (musicList?.length ?? 0) > 50;
+    const scrollProgress = useSharedValue(0);
+    const thumbDraggingRef = useRef(false);
+
+    const handleScroll = useCallback(
+        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+            if (thumbDraggingRef.current) {
+                return;
+            }
+            const { contentOffset, contentSize, layoutMeasurement } =
+                e.nativeEvent;
+            const totalScroll = contentSize.height - layoutMeasurement.height;
+            scrollProgress.value =
+                totalScroll > 0
+                    ? Math.min(Math.max(contentOffset.y / totalScroll, 0), 1)
+                    : 0;
+        },
+        [scrollProgress],
+    );
+
+    const handleThumbDragProgress = useCallback(
+        (p: number) => {
+            if (!musicList?.length || !flashListRef.current) {
+                return;
+            }
+            const index = Math.min(
+                musicList.length - 1,
+                Math.max(Math.round(p * (musicList.length - 1)), 0),
+            );
+            try {
+                flashListRef.current.scrollToIndex({
+                    index,
+                    animated: false,
+                    viewPosition: 0,
+                });
+            } catch { }
+        },
+        [musicList],
+    );
+
+    const handleThumbDragState = useCallback((dragging: boolean) => {
+        thumbDraggingRef.current = dragging;
+    }, []);
 
     // 查找高亮项的索引
     const highlightIndex = React.useMemo(() => {
@@ -117,6 +171,7 @@ export default function MusicList(props: IMusicListProps) {
                 extraData={highlightMusicItem}
                 data={musicList ?? []}
                 estimatedItemSize={ITEM_HEIGHT}
+                onScroll={handleScroll}
                 onScrollBeginDrag={handleScrollBegin}
                 onScrollEndDrag={handleScrollEnd}
                 onMomentumScrollEnd={handleScrollEnd}
@@ -160,6 +215,14 @@ export default function MusicList(props: IMusicListProps) {
                         />
                     </Pressable>
                 </View>
+            )}
+            {showScrollThumb && (
+                <ScrollThumb
+                    total={musicList!.length}
+                    progress={scrollProgress}
+                    onDragProgress={handleThumbDragProgress}
+                    onDragStateChange={handleThumbDragState}
+                />
             )}
         </View>
     );

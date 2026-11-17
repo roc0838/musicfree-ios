@@ -7,7 +7,7 @@ import {
 import { MusicRepeatMode } from "@/constants/repeatModeConst";
 import delay from "@/utils/delay";
 import getUrlExt from "@/utils/getUrlExt";
-import { errorLog, trace } from "@/utils/log";
+import { diagLog, errorLog, trace } from "@/utils/log";
 import { createMediaIndexMap } from "@/utils/mediaIndexMap";
 import { getMediaExtraProperty } from "@/utils/mediaExtra";
 import {
@@ -66,6 +66,8 @@ class TrackPlayer extends EventEmitter<{
     private currentIndex = -1;
     // 音乐播放器服务是否启动
     private serviceInited = false;
+    // seek 代次: 用户手动 seek / 切歌会递增, 用于让过期的续播 seek 失效, 避免把用户拖动的进度覆盖回去
+    private seekGeneration = 0;
     // 播放队列索引map
     private playListIndexMap = createMediaIndexMap([] as IMusic.IMusicItem[]);
 
@@ -731,6 +733,8 @@ class TrackPlayer extends EventEmitter<{
     }
 
     async seekTo(progress: number) {
+        // 用户手动 seek（进度条拖动 / 线控 / 歌词跳转）会使之前挂起的续播 seek 失效
+        this.seekGeneration++;
         PersistStatus.set("music.progress", progress);
         return ReactNativeTrackPlayer.seekTo(progress);
     }
@@ -814,6 +818,10 @@ class TrackPlayer extends EventEmitter<{
                 resumeAt = saved;
             }
         }
+
+        // 记录本次 setQueue 的 seek 代次。队列被重置后播放器 position 归零，
+        // 这里必须把全局进度同步为续播点，否则 UI 会短暂显示 0。
+        const myGeneration = ++this.seekGeneration;
         PersistStatus.set("music.progress", resumeAt);
         if (autoPlay) {
             await ReactNativeTrackPlayer.play();
@@ -821,9 +829,15 @@ class TrackPlayer extends EventEmitter<{
         if (resumeAt > 0) {
             // 需先 play 让播放器进入就绪态，seek 才能生效；
             // 短延时确保 track 已加载，避免续播被忽略。
+            // 关键：延时期间若用户手动拖动了进度条（seekGeneration 变化），
+            // 则放弃续播 seek，否则会把用户刚拖到的位置覆盖回旧进度。
             try {
                 await delay(150);
+                if (myGeneration !== this.seekGeneration) {
+                    return;
+                }
                 await ReactNativeTrackPlayer.seekTo(resumeAt);
+                diagLog("断点续播 seek", { resumeAt });
             } catch { }
         }
     }
