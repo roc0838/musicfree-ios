@@ -225,6 +225,7 @@
     "basicSettings.common": "General",
     "basicSettings.exportLog": "Export logs (send to developer)",
     "basicSettings.exportLog.failed": "Failed to export logs",
+    "basicSettings.exportLog.fallbackCopied": "Logs copied to clipboard, ready to paste",
     "basicSettings.maxHistoryLength": "Maximum History Records",
     "basicSettings.musicDetailDefault": "When opening song detail page",
     "basicSettings.musicDetailDefault.album": "Show album cover by default",

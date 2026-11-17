@@ -282,6 +282,7 @@ export interface ILanguageData {
     "basicSettings.common": string; // 通用
     "basicSettings.exportLog": string; // 导出日志
     "basicSettings.exportLog.failed": string; // 日志导出失败
+    "basicSettings.exportLog.fallbackCopied": string; // 日志已复制到剪贴板
     "basicSettings.maxHistoryLength": string; // 最大历史记录长度
     "basicSettings.musicDetailDefault": string; // 音乐详情默认
     "basicSettings.musicDetailDefault.album": string; // 专辑

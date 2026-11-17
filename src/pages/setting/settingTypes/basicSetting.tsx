@@ -150,10 +150,11 @@ export default function BasicSetting() {
         refreshCacheSize();
     }, []);
 
-    // 导出日志：汇总全部日志写入临时文件，调起系统分享面板
+    // 导出日志：汇总全部日志写入临时文件，调起系统分享面板；失败则降级复制到剪贴板
     const handleExportLog = useCallback(async () => {
+        let content = "";
         try {
-            const content = await collectAllLogs();
+            content = await collectAllLogs();
             const fileName = `MusicFree-log-${Date.now()}.txt`;
             const filePath = `${CachesDirectoryPath}/${fileName}`;
             await writeFile(filePath, content, "utf8");
@@ -164,10 +165,19 @@ export default function BasicSetting() {
                 type: "text/plain",
             });
         } catch (e: any) {
-            // 用户取消分享不算失败
-            if (e?.message && !/cancel|abort|dismiss/i.test(e.message)) {
-                Toast.warn(t("basicSettings.exportLog.failed"));
+            // 用户主动取消分享不算失败
+            if (!e?.message || /cancel|abort|dismiss/i.test(e.message)) {
+                return;
             }
+            // 降级：分享不可用时复制到剪贴板，用户仍可粘贴发出
+            try {
+                if (content) {
+                    Clipboard.setString(content);
+                    Toast.success(t("basicSettings.exportLog.fallbackCopied"));
+                    return;
+                }
+            } catch { }
+            Toast.warn(t("basicSettings.exportLog.failed"));
         }
     }, [t]);
 

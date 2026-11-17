@@ -225,6 +225,7 @@
     "basicSettings.common": "常規",
     "basicSettings.exportLog": "匯出日誌（傳給開發者排查問題）",
     "basicSettings.exportLog.failed": "日誌匯出失敗",
+    "basicSettings.exportLog.fallbackCopied": "已複製日誌到剪貼簿，可直接貼上傳送",
     "basicSettings.maxHistoryLength": "歷史紀錄最多保存條數",
     "basicSettings.musicDetailDefault": "打開歌曲詳情頁時",
     "basicSettings.musicDetailDefault.album": "預設展示歌曲封面",
